@@ -5,6 +5,19 @@ FROM php:8.1-apache-buster
  
 ARG DEBIAN_FRONTEND=noninteractive
 
+RUN apt-get update && apt-get install unixodbc unixodbc-dev -y && rm -rf /var/lib/apt/lists/*
+
+RUN docker-php-source extract
+RUN docker-php-ext-configure pdo_odbc --with-pdo-odbc=unixODBC,/usr/
+RUN docker-php-ext-install pdo_odbc \
+    && cd /usr/src/php/ext/odbc \
+    && phpize \
+    && sed -ri 's@^ *test +"\$PHP_.*" *= *"no" *&& *PHP_.*=yes *$@#&@g' configure \
+    && ./configure --with-unixODBC=shared,/usr \
+    && docker-php-ext-install odbc
+
+RUN pecl install sqlsrv pdo_sqlsrv
+
 # Update
 RUN apt-get -y update --fix-missing && \
     apt-get upgrade -y && \
@@ -34,6 +47,19 @@ zip \
 openssl && \
     rm -rf /var/lib/apt/lists/* && \
     curl -sS https://getcomposer.org/installer | php -- --install-dir=/usr/local/bin --filename=composer
+
+# ODBC Driver
+RUN apt update -y  &&  apt upgrade -y && apt-get update 
+RUN apt install -y python3.7 git python3-pip gnupg2
+
+# Add SQL Server ODBC Driver 17 for Ubuntu 18.04
+RUN curl https://packages.microsoft.com/keys/microsoft.asc | apt-key add -
+RUN curl https://packages.microsoft.com/config/ubuntu/18.04/prod.list > /etc/apt/sources.list.d/mssql-release.list
+RUN apt-get update
+RUN ACCEPT_EULA=Y apt-get install -y --allow-unauthenticated msodbcsql17
+RUN ACCEPT_EULA=Y apt-get install -y --allow-unauthenticated mssql-tools
+RUN echo 'export PATH="$PATH:/opt/mssql-tools/bin"' >> ~/.bash_profile
+RUN echo 'export PATH="$PATH:/opt/mssql-tools/bin"' >> ~/.bashrc
 
 # Install xdebug
 RUN pecl install xdebug-3.1.4 && \
@@ -70,7 +96,6 @@ RUN cd /usr/local/src && \
 
 RUN docker-php-ext-install pdo_mysql && \
     docker-php-ext-install pdo_sqlite && \
-    docker-php-ext-install bcmath && \
     docker-php-ext-install mysqli && \
     docker-php-ext-install curl && \
     docker-php-ext-install zip && \
